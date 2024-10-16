@@ -1,0 +1,18 @@
+{
+  "author": "Maximiliano Salvatti",
+  "license": "MIT",
+  "scripts": {
+    "test": "npx hardhat test",
+    "compile": "npx hardhat compile",
+    "deploy": "npx hardhat run scripts/deploy.ts --network polygon",
+    "ignition": "npx hardhat ignition deploy ignition/modules/BymaxPay.ts --network polygon"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.2",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.13"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0"
+  }
+}

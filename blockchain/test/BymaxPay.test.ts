@@ -258,6 +258,41 @@ describe("Bymax", function () {
     expect(customerAddresses).to.include(otherAccount.address);
   });
   
+  // Test case for successfully getting a customer with valid details
+  it("Should return customer details successfully", async function () {
+
+    // Load the deployed fixture (contracts and accounts)
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, contractor } = await loadFixture(deployFixture);
+
+    // Connect the BymaxPayCoin contract to the otherAccount
+    const instance = bymaxPayCoin.connect(otherAccount);
+
+    // Approve sufficient tokens for payment
+    await instance.approve(bymaxPayAddress, ethers.parseEther("0.01"));
+
+    // Perform the first payment to register the customer
+    await bymaxPay.pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
+
+    // Fetch the customer details using getCustomer function
+    const customerData = await bymaxPay.getCustomer(otherAccount.address);
+
+    // Verify that the customer details are correct
+    expect(customerData.tokenId).to.be.a('bigint');
+    expect(customerData.nextPayment).to.be.a('bigint');
+    expect(customerData.index).to.equal(0);
+    expect(customerData.contractor).to.equal(contractor.address);
+  });
+
+  // Test case for failing to get a customer when they do not exist
+  it("Should fail to return customer details for non-existent customer", async function () {
+
+    // Load the deployed fixture (contracts and accounts)
+    const { bymaxPay, otherAccount } = await loadFixture(deployFixture);
+
+    // Try to fetch the details of a customer that has not been registered
+    await expect(bymaxPay.getCustomer(otherAccount.address)).to.be.revertedWith("Customer does not exist");
+  });
+
   // Test case for removing a contractor
   it("Should remove contractor after balance is zero", async function () {
 

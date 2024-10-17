@@ -62,6 +62,11 @@ contract BymaxPay is ERC721Holder, Ownable, ReentrancyGuard {
         return (customerAddresses, customerData);
     }
 
+    function getCustomer(address customer) external view returns (Customer memory) {
+        require(payments[customer].nextPayment != 0, "Customer does not exist");
+        return payments[customer];
+    }
+
     function getContractors() external view onlyOwner returns (address[] memory, uint[] memory) {
         uint[] memory balances = new uint[](contractors.length);
         for (uint i = 0; i < contractors.length; i++) {

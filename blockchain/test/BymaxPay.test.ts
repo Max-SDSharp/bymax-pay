@@ -14,53 +14,125 @@ describe("Bymax", function () {
   // Async function to deploy all contracts for tests
   async function deployFixture() {
 
-  // Fetch the contract factory for BymaxPayCoin - Used for tests as payment coin
-  const BymaxPayCoin = await ethers.getContractFactory("BymaxPayCoin");
+    // Fetch the contract factory for BymaxPayCoin - Used for tests as payment coin
+    const BymaxPayCoin = await ethers.getContractFactory("BymaxPayCoin");
 
-  // Deploy the BymaxPayCoin contract
-  const bymaxPayCoin = await BymaxPayCoin.deploy();
+    // Deploy the BymaxPayCoin contract
+    const bymaxPayCoin = await BymaxPayCoin.deploy();
 
-  // Wait until BymaxPayCoin is deployed
-  await bymaxPayCoin.waitForDeployment();
+    // Wait until BymaxPayCoin is deployed
+    await bymaxPayCoin.waitForDeployment();
 
-  // Fetch the contract factory for BymaxPayCollection
-  const BymaxPayCollection = await ethers.getContractFactory("BymaxPayCollection");
+    // Fetch the contract factory for BymaxPayCollection (Contractor 1)
+    const BymaxPayCollection1 = await ethers.getContractFactory("BymaxPayCollection");
 
-  // Deploy the BymaxPayCollection contract
-  const bymaxPayCollection = await BymaxPayCollection.deploy();
+    // Deploy the BymaxPayCollection contract for Contractor 1
+    const bymaxPayCollectionContractor1 = await BymaxPayCollection1.deploy();
 
-  // Wait until BymaxPayCollection is deployed
-  await bymaxPayCollection.waitForDeployment();
+    // Wait until BymaxPayCollectionContractor1 is deployed
+    await bymaxPayCollectionContractor1.waitForDeployment();
 
-  // Get the address of the deployed collection
-  const collectionAddress = await bymaxPayCollection.getAddress();
+    // Fetch the contract factory for BymaxPayCollection (Contractor 2)
+    const BymaxPayCollection2 = await ethers.getContractFactory("BymaxPayCollection");
 
-  // Fetch the contract factory for BymaxPay
-  const BymaxPay = await ethers.getContractFactory("BymaxPay");
+    // Deploy the BymaxPayCollection contract for Contractor 2
+    const bymaxPayCollectionContractor2 = await BymaxPayCollection2.deploy();
 
-  // Get the address of the BymaxPayCoin contract
-  const coinAddress = await bymaxPayCoin.getAddress();
+    // Wait until BymaxPayCollectionContractor2 is deployed
+    await bymaxPayCollectionContractor2.waitForDeployment();
 
-  // Deploy BymaxPay contract, passing the coin and collection addresses
-  const bymaxPay = await BymaxPay.deploy(coinAddress, collectionAddress);
+    // Get the addresses of the deployed collections
+    const collectionAddress1 = await bymaxPayCollectionContractor1.getAddress();
+    const collectionAddress2 = await bymaxPayCollectionContractor2.getAddress();
 
-  // Wait until BymaxPay is deployed
-  await bymaxPay.waitForDeployment();
+    // Fetch the contract factory for BymaxPay
+    const BymaxPay = await ethers.getContractFactory("BymaxPay");
 
-  // Get the address of the BymaxPay contract
-  const bymaxPayAddress = await bymaxPay.getAddress();
+    // Get the address of the BymaxPayCoin contract
+    const coinAddress = await bymaxPayCoin.getAddress();
 
-  // Set the authorized contract address in the BymaxPayCollection contract
-  await bymaxPayCollection.setAuthorizedContract(bymaxPayAddress);
+    // Deploy BymaxPay contract, passing the coin address
+    const bymaxPay = await BymaxPay.deploy(coinAddress);
 
-  // Get the signers (owner, another account, and contractor)
-  const [owner, otherAccount, contractor, otherContractor] = await ethers.getSigners();
+    // Wait until BymaxPay is deployed
+    await bymaxPay.waitForDeployment();
 
-  // Mint 1 BYMAX coin for the otherAccount
-  await bymaxPayCoin.mint(otherAccount.address, ethers.parseEther("1"));
+    // Get the address of the BymaxPay contract
+    const bymaxPayAddress = await bymaxPay.getAddress();
 
-  // Return all deployed contracts and accounts for use in tests
-  return { bymaxPay, bymaxPayAddress, bymaxPayCoin, coinAddress, bymaxPayCollection, collectionAddress, owner, otherAccount, contractor, otherContractor };  }
+    // Set the authorized contract address in the BymaxPayCollection contracts
+    await bymaxPayCollectionContractor1.setAuthorizedContract(bymaxPayAddress);
+    await bymaxPayCollectionContractor2.setAuthorizedContract(bymaxPayAddress);
+
+    // Get the signers (owner, another account, contractor, and other contractor)
+    const [owner, account, otherAccount, contractor, otherContractor] = await ethers.getSigners();
+
+    // Mint 1 BYMAX coin for the account
+    await bymaxPayCoin.mint(account.address, ethers.parseEther("1"));
+
+    // Mint 1 BYMAX coin for the otherAccount
+    await bymaxPayCoin.mint(otherAccount.address, ethers.parseEther("1"));
+
+    // Return all deployed contracts and accounts for use in tests
+    return { bymaxPay, bymaxPayAddress, bymaxPayCoin, coinAddress, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2, collectionAddress1, collectionAddress2, owner, account, otherAccount, contractor, otherContractor };  
+  }
+
+  // Test case to verify event emission when updating the fee percentage
+  it("Should emit FeePercentageUpdated event when updating fee percentage", async function () {
+
+    // Load the deployed fixture (contracts and accounts)
+    const { bymaxPay, owner } = await loadFixture(deployFixture);
+
+    // Define a new fee percentage (e.g., 2500 = 25%)
+    const newFeePercentage = 2500;
+
+    // Expect the transaction to emit the "FeePercentageUpdated" event with the new fee
+    await expect(bymaxPay.connect(owner).setFeePercentage(newFeePercentage))
+      .to.emit(bymaxPay, "FeePercentageUpdated")
+      .withArgs(newFeePercentage);
+  });
+
+  // Test case to verify the total number of contractors
+  it("Should return the total number of contractors", async function () {
+
+    // Load the deployed fixture (contracts and accounts)
+    const { bymaxPay, owner, contractor, otherContractor, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register two contractors with their respective NFT collections
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
+    await bymaxPay.connect(owner).addContractor(otherContractor.address, bymaxPayCollectionContractor2.getAddress());
+
+    // Get the total number of contractors
+    const totalContractors = await bymaxPay.getTotalContractors();
+
+    // Expect the total number of contractors to be 2
+    expect(totalContractors).to.equal(2);
+  });
+
+  // Test case to verify the total number of customers
+  it("Should return the total number of customers", async function () {
+
+    // Load the deployed fixture (contracts and accounts)
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherAccount, bymaxPayCollectionContractor1 } = await loadFixture(deployFixture);
+
+    // Register a contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
+
+    // Connect the BymaxPayCoin contract to the otherAccount
+    const instance = bymaxPayCoin.connect(otherAccount);
+
+    // Approve BymaxPay contract to spend 0.01 BYMAX from otherAccount
+    await instance.approve(bymaxPayAddress, ethers.parseEther("0.01"));
+
+    // Perform the first payment, associating it with the contractor
+    await bymaxPay.connect(owner).pay(otherAccount.address, contractor.address, ethers.parseEther("0.01"), 30 * 24 * 60 * 60);
+
+    // Get the total number of customers
+    const totalCustomers = await bymaxPay.getTotalCustomers();
+
+    // Expect the total number of customers to be 1
+    expect(totalCustomers).to.equal(1);
+  });
 
   // Test case to prevent payment with zero amount
   it("Should NOT allow payment with zero amount", async function () {
@@ -86,11 +158,17 @@ describe("Bymax", function () {
     ).to.be.revertedWith("Invalid duration");
   });
 
-  // Test case to prevent a different contractor from charging a customer
-  it("Should NOT allow a different contractor to charge a customer", async function () {
-    
+  // Test case for a customer making payments to two different contractors
+  it("Should allow customer to pay two different contractors", async function () {
+
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
+
+    // Register the second contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(otherContractor.address, bymaxPayCollectionContractor2.getAddress());
 
     // Connect the BymaxPayCoin contract to the otherAccount (customer)
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -98,77 +176,45 @@ describe("Bymax", function () {
     // Approve the BymaxPay contract to spend 0.01 BYMAX from otherAccount (customer)
     await instance.approve(bymaxPayAddress, ethers.parseEther("0.01"));
 
-    // Perform the first payment from otherAccount by contractor
+    // Perform the first payment from otherAccount to the first contractor
     await bymaxPay.connect(owner).pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
 
-    // Check that the payment was successful and the customer is associated with the contractor
-    const customerData = await bymaxPay.payments(otherAccount.address);
-    expect(customerData.contractor).to.equal(contractor.address);
+    // Check that the customer has the NFT and is associated with the first contractor
+    const customerData1 = await bymaxPay.customerPayments(otherAccount.address, contractor.address);
+    expect(customerData1.tokenId).to.be.gt(0);
 
-    // Try to perform a payment from otherAccount by a different contractor (otherContractor)
-    const newAmount = ethers.parseEther("0.02");
-    const newDuration = 60 * 24 * 60 * 60; // 60 days in seconds
+    // Verify that the customer has a new NFT and it's owned by them
+    const tokenId1 = customerData1.tokenId;
+    expect(await bymaxPayCollectionContractor1.ownerOf(tokenId1)).to.equal(otherAccount.address);
 
-    // Expect the transaction to revert with the error "Customer already associated with another contractor"
-    await expect(
-      bymaxPay.connect(owner).pay(otherAccount.address, otherContractor.address, newAmount, newDuration)
-    ).to.be.revertedWith("Customer already associated with another contractor");
-  });
-
-  // Test case for removing a customer and allowing a different contractor to charge them after removal
-  it("Should remove customer and allow another contractor to charge them", async function () {
-    
-    // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollection } = await loadFixture(deployFixture);
-
-    // Connect the BymaxPayCoin contract to the otherAccount (customer)
-    const instance = bymaxPayCoin.connect(otherAccount);
-
-    // Approve the BymaxPay contract to spend 0.01 BYMAX from otherAccount (customer)
-    await instance.approve(bymaxPayAddress, ethers.parseEther("0.01"));
-
-    // Perform the first payment from otherAccount by contractor
-    await bymaxPay.connect(owner).pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
-
-    // Check that the customer has the NFT and is associated with the contractor
-    const customerData = await bymaxPay.payments(otherAccount.address);
-    expect(customerData.contractor).to.equal(contractor.address);
-
-    const tokenId = customerData.tokenId;
-    expect(await bymaxPayCollection.ownerOf(tokenId)).to.equal(otherAccount.address);
-
-    // Remove the customer (which should also burn the NFT)
-    await bymaxPay.connect(owner).removeCustomer(otherAccount.address);
-
-    // Check that the customer no longer owns the NFT
-    await expect(bymaxPayCollection.ownerOf(tokenId)).to.be.revertedWithCustomError(bymaxPayCollection, "ERC721NonexistentToken")
-    .withArgs(tokenId);
-
-    // Approve sufficient BYMAX for another payment by a new contractor (otherContractor)
+    // Approve sufficient BYMAX for another payment by the second contractor
     await instance.approve(bymaxPayAddress, ethers.parseEther("0.02"));
 
-    // New payment from otherContractor
+    // Define new payment parameters for the second contractor
     const newDuration = 60 * 24 * 60 * 60; // 60 days in seconds
     const newAmount = ethers.parseEther("0.02");
 
-    // Perform payment with the new contractor
+    // Perform payment with the second contractor
     await bymaxPay.connect(owner).pay(otherAccount.address, otherContractor.address, newAmount, newDuration);
 
     // Check if the new contractor is now associated with the customer
-    const newCustomerData = await bymaxPay.payments(otherAccount.address);
-    expect(newCustomerData.contractor).to.equal(otherContractor.address);
+    const customerData2 = await bymaxPay.customerPayments(otherAccount.address, otherContractor.address);
+    expect(customerData2.tokenId).to.be.gt(0);
 
     // Verify that the customer has a new NFT and it's owned by them
-    const newTokenId = newCustomerData.tokenId;
-    expect(await bymaxPayCollection.ownerOf(newTokenId)).to.equal(otherAccount.address);
+    const tokenId2 = customerData2.tokenId;
+    expect(await bymaxPayCollectionContractor2.ownerOf(tokenId2)).to.equal(otherAccount.address);
   });
-  
+
   // Test case to handle the first payment
   it("Should do first payment", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, contractor } = await loadFixture(deployFixture);
-    
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
+
     // Connect the BymaxPayCoin contract to the otherAccount
     const instance = bymaxPayCoin.connect(otherAccount);
 
@@ -183,7 +229,10 @@ describe("Bymax", function () {
   it("Should NOT do first payment", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, otherAccount, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Expect the payment to be reverted with an "Insufficient balance and/or allowance" error
     await expect(bymaxPay.pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds)).to.be.revertedWith("Insufficient balance and/or allowance.");  
@@ -193,7 +242,10 @@ describe("Bymax", function () {
   it("Should do second payment", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Connect the BymaxPayCoin contract to the otherAccount
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -215,7 +267,10 @@ describe("Bymax", function () {
   it("Should NOT do second payment", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Connect the BymaxPayCoin contract to the otherAccount
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -240,7 +295,10 @@ describe("Bymax", function () {
   it("Should return the list of customers", async function () {
     
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, owner, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Approve sufficient tokens for the first payment
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -252,17 +310,65 @@ describe("Bymax", function () {
     await bymaxPay.connect(owner).pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
 
     // Call the getCustomers function and get the customer addresses and data
-    const [customerAddresses, customerData] = await bymaxPay.getCustomers();
+    const [customerAddresses, customerData] = await bymaxPay.getCustomers(10,0);
 
     // Verify that the customer was registered correctly
     expect(customerAddresses).to.include(otherAccount.address);
   });
-  
+
+  // Test case for getting the paginated list of customers
+  it("Should return the paginated list of customers", async function () {
+    
+    // Load the deployed fixture (contracts and accounts)
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, account, otherAccount, contractor, otherContractor, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register two contractors with their respective NFT collections
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
+    await bymaxPay.connect(owner).addContractor(otherContractor.address, bymaxPayCollectionContractor2.getAddress());
+
+    // Approve sufficient tokens for the first payment
+    const instance1 = bymaxPayCoin.connect(account);
+    const instance2 = bymaxPayCoin.connect(otherAccount);
+
+    // Approve BymaxPay contract to spend 0.01 BYMAX from each customer
+    await instance1.approve(bymaxPayAddress, ethers.parseEther("0.01"));
+    await instance2.approve(bymaxPayAddress, ethers.parseEther("0.01"));
+
+    // Perform payments to register both customers
+    await bymaxPay.connect(owner).pay(account.address, contractor.address, amount, thirtyDaysInSeconds);
+    await bymaxPay.connect(owner).pay(otherAccount.address, otherContractor.address, amount, thirtyDaysInSeconds);
+
+    // Get the first page of customers (limit 1, skip 0)
+    let [customerAddresses, customerData] = await bymaxPay.getCustomers(1, 0);
+
+    // Verify the first page contains the first customer
+    expect(customerAddresses.length).to.equal(1);
+    expect(customerAddresses[0]).to.equal(account.address);
+
+    // Get the second page of customers (limit 1, skip 1)
+    [customerAddresses, customerData] = await bymaxPay.getCustomers(1, 1);
+
+    // Verify the second page contains the second customer
+    expect(customerAddresses.length).to.equal(1);
+    expect(customerAddresses[0]).to.equal(otherAccount.address);
+
+    // Get all customers (limit 10, skip 0) to ensure both are registered
+    [customerAddresses, customerData] = await bymaxPay.getCustomers(10, 0);
+
+    // Verify both customers are present
+    expect(customerAddresses.length).to.equal(2);
+    expect(customerAddresses).to.include(account.address);
+    expect(customerAddresses).to.include(otherAccount.address);
+  });
+
   // Test case for successfully getting a customer with valid details
   it("Should return customer details successfully", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Connect the BymaxPayCoin contract to the otherAccount
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -277,27 +383,143 @@ describe("Bymax", function () {
     const customerData = await bymaxPay.getCustomer(otherAccount.address);
 
     // Verify that the customer details are correct
-    expect(customerData.tokenId).to.be.a('bigint');
-    expect(customerData.nextPayment).to.be.a('bigint');
-    expect(customerData.index).to.equal(0);
-    expect(customerData.contractor).to.equal(contractor.address);
+    expect(customerData[0].tokenId).to.be.a('bigint');
+    expect(customerData[0].nextPayment).to.be.a('bigint');
+    expect(customerData[0].duration).to.equal(thirtyDaysInSeconds);
   });
 
-  // Test case for failing to get a customer when they do not exist
-  it("Should fail to return customer details for non-existent customer", async function () {
+  // Test case for failing to return customer details for a non-existent customer
+  it("Should return an empty list for non-existent customer", async function () {
 
     // Load the deployed fixture (contracts and accounts)
     const { bymaxPay, otherAccount } = await loadFixture(deployFixture);
 
-    // Try to fetch the details of a customer that has not been registered
-    await expect(bymaxPay.getCustomer(otherAccount.address)).to.be.revertedWith("Customer does not exist");
+    // Fetch the details of a customer that has not been registered
+    const customerPayments = await bymaxPay.getCustomer(otherAccount.address);
+
+    // Check if the returned customer details array is empty
+    expect(customerPayments.length).to.equal(0);
+  });
+
+  // Test case to handle removal of a non-existing customer
+  it("Should fail to remove a non-existing customer", async function () {
+
+    // Load the deployed fixture
+    const { bymaxPay, owner, otherAccount } = await loadFixture(deployFixture);
+
+    // Expect the removal of a non-existing customer to be reverted
+    await expect(bymaxPay.connect(owner).removeCustomer(otherAccount.address))
+      .to.be.revertedWith("Customer does not exist");
+  });
+
+  // Test case to prevent removal of a customer with active NFT access
+  it("Should fail to remove a customer with active NFT access", async function () {
+
+    // Load the deployed fixture (contracts and accounts)
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherAccount, bymaxPayCollectionContractor1 } = await loadFixture(deployFixture);
+
+    // Register the contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
+
+    // Connect the BymaxPayCoin contract to the otherAccount (customer)
+    const instance = bymaxPayCoin.connect(otherAccount);
+
+    // Approve the BymaxPay contract to spend 0.01 BYMAX from otherAccount (customer)
+    await instance.approve(bymaxPayAddress, ethers.parseEther("0.01"));
+
+    // Perform the first payment from otherAccount by contractor
+    await bymaxPay.connect(owner).pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
+
+    // Check that the customer has the NFT and is associated with the contractor
+    const customerData = await bymaxPay.getCustomerDetails(otherAccount.address, contractor);
+    const tokenId = customerData.tokenId;
+    expect(await bymaxPayCollectionContractor1.ownerOf(tokenId)).to.equal(otherAccount.address);
+
+    // Attempt to remove the customer and expect the transaction to be reverted
+    await expect(bymaxPay.connect(owner).removeCustomer(otherAccount.address))
+      .to.be.revertedWith("Customer still has active access in a contractor");
+  });
+  
+  // Test case for getting the paginated list of contractors
+  it("Should return the paginated list of contractors", async function () {
+      
+    // Load the deployed fixture (contracts and accounts)
+    const { bymaxPay, owner, contractor, otherContractor, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register two contractors with their respective NFT collections
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
+    await bymaxPay.connect(owner).addContractor(otherContractor.address, bymaxPayCollectionContractor2.getAddress());
+
+    // Get the first page of contractors (limit 1, skip 0)
+    let [contractorAddresses, balances, nftCollections] = await bymaxPay.getContractors(1, 0);
+
+    // Verify the first page contains the first contractor
+    expect(contractorAddresses.length).to.equal(1);
+    expect(contractorAddresses[0]).to.equal(contractor.address);
+
+    // Get the second page of contractors (limit 1, skip 1)
+    [contractorAddresses, balances, nftCollections] = await bymaxPay.getContractors(1, 1);
+
+    // Verify the second page contains the second contractor
+    expect(contractorAddresses.length).to.equal(1);
+    expect(contractorAddresses[0]).to.equal(otherContractor.address);
+
+    // Get all contractors (limit 10, skip 0) to ensure both are registered
+    [contractorAddresses, balances, nftCollections] = await bymaxPay.getContractors(10, 0);
+
+    // Verify both contractors are present
+    expect(contractorAddresses.length).to.equal(2);
+    expect(contractorAddresses).to.include(contractor.address);
+    expect(contractorAddresses).to.include(otherContractor.address);
+  });
+
+  // Test case to check contractor's balance
+  it("Should return the contractor's balance", async function () {
+    
+    // Load the deployed fixture (contracts and accounts)
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
+
+    // Verify the initial balance of the contractor is zero
+    const initialBalance = await bymaxPay.connect(contractor).getContractorBalance();
+    expect(initialBalance).to.equal(0);
+
+    // Perform a payment to increase contractor's balance
+    const instance = bymaxPayCoin.connect(otherAccount);
+    await instance.approve(bymaxPayAddress, ethers.parseEther("0.01"));
+    await bymaxPay.connect(owner).pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
+
+    // Check updated contractor balance
+    const updatedBalance = await bymaxPay.connect(contractor).getContractorBalance();
+    expect(updatedBalance).to.equal(ethers.parseEther("0.0095")); // Considering 5% fee deduction
+  });
+
+  // Test case to check contractor's NFT collection
+  it("Should return the contractor's NFT collection address", async function () {
+
+    // Load the deployed fixture (contracts and accounts)
+    const { bymaxPay, owner, contractor, bymaxPayCollectionContractor1 } = await loadFixture(deployFixture);
+
+    // Register the contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
+
+    // Get the contractor's NFT collection address
+    const nftCollectionAddress = await bymaxPay.connect(contractor).getContractorNFTCollection();
+
+    // Verify the NFT collection address is correct
+    expect(nftCollectionAddress).to.equal(await bymaxPayCollectionContractor1.getAddress());
   });
 
   // Test case for removing a contractor
   it("Should remove contractor after balance is zero", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, owner, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Approve sufficient tokens for the first payment
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -319,7 +541,7 @@ describe("Bymax", function () {
     await bymaxPay.connect(owner).removeContractor(contractor.address);
 
     // Verify that the contractor has been removed from the list
-    let [contractorsArray, balancesArray] = await bymaxPay.getContractors();
+    let [contractorsArray, balancesArray] = await bymaxPay.getContractors(10,0);
     expect(contractorsArray).to.not.include(contractor.address);
   });
   
@@ -327,7 +549,10 @@ describe("Bymax", function () {
   it("Should NOT remove contractor with non-zero balance", async function () {
   
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherAccount } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
   
     // Approve sufficient tokens for the first payment
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -338,9 +563,9 @@ describe("Bymax", function () {
     // Simulate payment to the contractor to give them a balance
     await bymaxPay.connect(owner).pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
   
-    // Verify that the contractor's balance is greater than 0
-    const contractorData = await bymaxPay.contractorsData(contractor.address);
-    expect(contractorData).to.be.gt(0);
+    // Verify the balance of the contractor before withdrawal
+    const contractorBalance = await bymaxPay.connect(contractor).getContractorBalance();
+    expect(contractorBalance).to.be.gt(0);
   
     // Attempt to remove the contractor and expect the transaction to be reverted
     await expect(bymaxPay.connect(owner).removeContractor(contractor.address))
@@ -351,7 +576,10 @@ describe("Bymax", function () {
   it("Should allow contractor to withdraw balance", async function () {
     
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
   
     // Connect BymaxPayCoin to the otherAccount
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -376,7 +604,10 @@ describe("Bymax", function () {
   it("Should correctly calculate and distribute fees", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
     
     // Fetch the current fee percentage
     const feePercentage = await bymaxPay.feePercentage();
@@ -401,7 +632,7 @@ describe("Bymax", function () {
     expect(accumulatedFees).to.equal(expectedFee);
 
     // Verify that the contractor's balance matches the expected contractor amount
-    const contractorBalance = await bymaxPay.contractorsData(contractor.address);
+    const contractorBalance = await bymaxPay.connect(contractor).getContractorBalance();
     expect(contractorBalance).to.equal(expectedContractorAmount);
   });
 
@@ -409,7 +640,10 @@ describe("Bymax", function () {
   it("Should update fee percentage and apply new fee correctly", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, otherAccount, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Set a new fee percentage of 10%
     const newFeePercentage = 1000; // 10%
@@ -435,7 +669,7 @@ describe("Bymax", function () {
     expect(accumulatedFees).to.equal(expectedFee);
 
     // Verify that the contractor's balance matches the expected contractor amount after the fee
-    const contractorBalance = await bymaxPay.contractorsData(contractor.address);
+    const contractorBalance = await bymaxPay.connect(contractor).getContractorBalance();
     expect(contractorBalance).to.equal(expectedContractorAmount);
   });
 
@@ -443,7 +677,10 @@ describe("Bymax", function () {
   it("Should allow owner to withdraw fees", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, owner, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Connect the BymaxPayCoin contract to the otherAccount
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -462,7 +699,10 @@ describe("Bymax", function () {
   it("Should NOT allow non-owner to withdraw fees", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, owner, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Connect the BymaxPayCoin contract to the otherAccount
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -482,7 +722,10 @@ describe("Bymax", function () {
   it("Should do second payment after revoke", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, bymaxPayCollection, otherAccount, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Connect the BymaxPayCoin contract to the otherAccount
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -505,17 +748,20 @@ describe("Bymax", function () {
     await expect(bymaxPay.pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds)).to.emit(bymaxPay, "Granted");
 
     // Fetch the updated payment info for the customer
-    const payment = await bymaxPay.payments(otherAccount.address);
+    const payment = await bymaxPay.getCustomerDetails(otherAccount.address, contractor);
 
     // Verify that the customer now owns the NFT again
-    expect(await bymaxPayCollection.ownerOf(payment.tokenId)).to.equal(otherAccount.address);
+    expect(await bymaxPayCollectionContractor1.ownerOf(payment.tokenId)).to.equal(otherAccount.address);
   });
 
-  // Test case to handle removal of a customer and burning of the NFT
-  it("Should remove customer and burn NFT", async function () {
+  // Test case to handle removal of a customer and revoke of the NFT
+  it("Should remove customer and revoke NFT", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, bymaxPayCollection, otherAccount, owner, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Connect the BymaxPayCoin contract to the otherAccount
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -527,24 +773,35 @@ describe("Bymax", function () {
     await bymaxPay.connect(owner).pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
 
     // Fetch payment info for the customer (otherAccount)
-    const payment = await bymaxPay.payments(otherAccount.address);
+    let customer = await bymaxPay.getCustomerDetails(otherAccount.address, contractor);
 
     // Verify that the customer owns the NFT (tokenId is valid)
-    expect(await bymaxPayCollection.ownerOf(payment.tokenId)).to.equal(otherAccount.address);
+    expect(await bymaxPayCollectionContractor1.ownerOf(customer.tokenId)).to.equal(otherAccount.address);
 
-    // Owner removes the customer and burns the NFT
+    // Simulate the passage of 31 days
+    await time.increase(31 * 24 * 60 * 60);
+
+    // Perform the second payment and revoke the NFT due to insufficient payment
+    await bymaxPay.connect(owner).pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
+    
+    // Owner removes the customer
     await bymaxPay.connect(owner).removeCustomer(otherAccount.address);
 
+    // Fetch payment info for the customer (otherAccount)
+    customer = await bymaxPay.getCustomerDetails(otherAccount.address, contractor);
+
     // Expect the NFT to no longer exist after being burned
-    await expect(bymaxPayCollection.ownerOf(payment.tokenId)).to.be.revertedWithCustomError(bymaxPayCollection, "ERC721NonexistentToken")
-        .withArgs(payment.tokenId);
+    expect(customer.tokenId).to.equal(0);
   });
 
   // Test case to handle overpayment and accumulate future access time
   it("Should handle overpayment and accumulate future access time", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, otherAccount, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Connect the BymaxPayCoin contract to the otherAccount
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -556,7 +813,7 @@ describe("Bymax", function () {
     await bymaxPay.pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
 
     // Fetch the initial next payment time after the first payment
-    let payment = await bymaxPay.payments(otherAccount.address);
+    let payment = await bymaxPay.getCustomerDetails(otherAccount.address, contractor);
     const initialNextPaymentTime = BigInt(payment.nextPayment);
 
     // Simulate the passage of 15 days
@@ -566,28 +823,21 @@ describe("Bymax", function () {
     await bymaxPay.pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
 
     // Fetch the updated next payment time after the second payment
-    payment = await bymaxPay.payments(otherAccount.address);
+    payment = await bymaxPay.getCustomerDetails(otherAccount.address, contractor);
     const updatedNextPaymentTime = BigInt(payment.nextPayment);
 
     // Verify that the next payment time has been correctly updated and accumulated
     expect(updatedNextPaymentTime).to.equal(initialNextPaymentTime + BigInt(thirtyDaysInSeconds));
   });
   
-  // Test case to handle removal of a non-existing customer gracefully
-  it("Should handle removal of non-existing customer gracefully", async function () {
-
-    // Load the deployed fixture
-    const { bymaxPay, owner, otherAccount } = await loadFixture(deployFixture);
-
-    // Expect the removal of a non-existing customer to be reverted
-    await expect(bymaxPay.connect(owner).removeCustomer(otherAccount.address)).to.be.revertedWith("Customer does not exist");
-  });
-
   // Test case to handle transferring an NFT back to a customer after revocation and payment
   it("Should transfer NFT back to customer after revoked and payment", async function () {
 
     // Load the deployed fixture (contracts and accounts)
-    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, bymaxPayCollection, otherAccount, contractor } = await loadFixture(deployFixture);
+    const { bymaxPay, bymaxPayAddress, bymaxPayCoin, owner, contractor, otherContractor, otherAccount, bymaxPayCollectionContractor1, bymaxPayCollectionContractor2 } = await loadFixture(deployFixture);
+
+    // Register the first contractor with its NFT collection
+    await bymaxPay.connect(owner).addContractor(contractor.address, bymaxPayCollectionContractor1.getAddress());
 
     // Connect the BymaxPayCoin contract to the otherAccount
     const instance = bymaxPayCoin.connect(otherAccount);
@@ -599,8 +849,8 @@ describe("Bymax", function () {
     await bymaxPay.pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds);
 
     // Fetch payment info and check that the NFT was minted to the customer
-    let payment = await bymaxPay.payments(otherAccount.address);
-    expect(await bymaxPayCollection.ownerOf(payment.tokenId)).to.equal(otherAccount.address);
+    let payment = await bymaxPay.getCustomerDetails(otherAccount.address, contractor);
+    expect(await bymaxPayCollectionContractor1.ownerOf(payment.tokenId)).to.equal(otherAccount.address);
 
     // Simulate the passage of 31 days and revoke the NFT due to insufficient payment
     await time.increase(31 * 24 * 60 * 60);
@@ -608,7 +858,7 @@ describe("Bymax", function () {
     await expect(bymaxPay.pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds)).to.emit(bymaxPay, "Revoked");
 
     // Check that the contract now owns the NFT after revocation
-    expect(await bymaxPayCollection.ownerOf(payment.tokenId)).to.equal(bymaxPayAddress);
+    expect(await bymaxPayCollectionContractor1.ownerOf(payment.tokenId)).to.equal(bymaxPayAddress);
 
     // Approve sufficient BYMAX (1 BYMAX) for payment after revocation
     await instance.approve(bymaxPayAddress, ethers.parseEther("1"));
@@ -617,9 +867,9 @@ describe("Bymax", function () {
     await expect(bymaxPay.pay(otherAccount.address, contractor.address, amount, thirtyDaysInSeconds)).to.emit(bymaxPay, "Granted");
 
     // Fetch the updated payment info and check the owner of the NFT
-    payment = await bymaxPay.payments(otherAccount.address);
+    payment = await bymaxPay.getCustomerDetails(otherAccount.address, contractor);
 
     // Verify that the customer now owns the NFT again
-    expect(await bymaxPayCollection.ownerOf(payment.tokenId)).to.equal(otherAccount.address);
+    expect(await bymaxPayCollectionContractor1.ownerOf(payment.tokenId)).to.equal(otherAccount.address);
   });
 });

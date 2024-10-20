@@ -15,7 +15,7 @@ async function main() {
   console.log(`BymaxPayCollection deployed to ${bymaxPayCollection.target}`);
 
   const BymaxPay = await ethers.getContractFactory("BymaxPay");
-  const bymaxPay = await BymaxPay.deploy(bymaxPayCoin.target, bymaxPayCollection.target);
+  const bymaxPay = await BymaxPay.deploy(bymaxPayCoin.target);
 
   await bymaxPay.waitForDeployment();
   console.log(`BymaxPay deployed to ${bymaxPay.target}`);

@@ -2,13 +2,14 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "./INFTCollection.sol";
 
 contract BymaxPayCollection is INFTCollection, ERC721, Ownable {
-
+    using Strings for uint256;
     uint256 private _tokenIds;
 
     address public authorizedContract;
@@ -16,9 +17,7 @@ contract BymaxPayCollection is INFTCollection, ERC721, Ownable {
 
     constructor() ERC721("Bymax Pass", "BPASS") Ownable(msg.sender) {}
 
-    function setAuthorizedContract(
-        address newAuthorizedContract
-    ) external onlyOwner {
+    function setAuthorizedContract(address newAuthorizedContract) external onlyOwner {
         authorizedContract = newAuthorizedContract;
     }
 
@@ -39,9 +38,7 @@ contract BymaxPayCollection is INFTCollection, ERC721, Ownable {
         _burn(tokenId);
     }
 
-    function tokenURI(
-        uint tokenId
-    ) public view override(ERC721) returns (string memory) {
+    function tokenURI(uint tokenId) public view override(ERC721) returns (string memory) {
         return string.concat(_baseURI(), Strings.toString(tokenId), ".json");
     }
 
@@ -57,5 +54,11 @@ contract BymaxPayCollection is INFTCollection, ERC721, Ownable {
         _setApprovalForAll(customer, authorizedContract, true);
 
         return tokenId;
+    }
+
+    function supportsInterface(bytes4 interfaceId) public view virtual override(ERC721, IERC165) returns (bool) {
+        return
+            interfaceId == type(INFTCollection).interfaceId ||
+            super.supportsInterface(interfaceId);
     }
 }

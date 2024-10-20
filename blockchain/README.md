@@ -1,4 +1,4 @@
-# BymaxPay - Decentralized Payment Management
+# BymaxPay - Payment Management - Smart Contract
 
 BymaxPay is a smart contract-based recurring payment management system designed to facilitate automated payments using ERC20 tokens and access control with NFT-based licenses. It allows contractors to own their NFT collection, manage customer payments, and handle token withdrawals securely.
 
